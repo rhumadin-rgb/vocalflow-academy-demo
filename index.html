@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f7f8fc" />
+    <title>보컬플로우 | 음악학원 운영</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Pretendard:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" id="sidebar">
+        <a class="brand" href="#" data-page="dashboard" aria-label="보컬플로우 홈">
+          <span class="brand-mark"><span></span><span></span><span></span></span>
+          <span class="brand-copy"><strong>vocalflow</strong><small>MUSIC STUDIO</small></span>
+        </a>
+        <div class="studio-switch">
+          <span class="studio-avatar">V</span>
+          <span class="studio-label"><strong>보이스온 실용음악학원</strong><small>강남 본점</small></span>
+          <span class="chevron">⌄</span>
+        </div>
+        <div class="nav-label">WORKSPACE</div>
+        <nav class="main-nav" aria-label="주 메뉴">
+          <button class="nav-item active" data-page="dashboard"><span class="nav-icon">◫</span>대시보드</button>
+          <button class="nav-item" data-page="schedule"><span class="nav-icon">▦</span>수업 · 출결</button>
+          <button class="nav-item" data-page="feedback"><span class="nav-icon">✎</span>수업 피드백</button>
+          <button class="nav-item" data-page="students"><span class="nav-icon">♙</span>원생 · 수납</button>
+          <button class="nav-item" data-page="rooms"><span class="nav-icon">⌂</span>연습실 예약</button>
+          <button class="nav-item" data-page="teachers"><span class="nav-icon">♧</span>강사 · 급여</button>
+          <button class="nav-item" data-page="accounting"><span class="nav-icon">₩</span>수입 · 지출</button>
+        </nav>
+        <div class="sidebar-bottom">
+          <div class="help-card"><span class="help-spark">✳</span><strong>처음 사용하시나요?</strong><p>보컬플로우 시작 가이드를<br />확인해보세요.</p><button data-action="guide">가이드 보기 <span>↗</span></button></div>
+          <button class="nav-item settings-item" data-page="settings"><span class="nav-icon">⚙</span>설정</button>
+          <div class="profile">
+            <div class="profile-avatar">김</div><div class="profile-copy"><strong>김보이스 원장님</strong><small>원장 계정</small></div><button class="more-button" aria-label="계정 메뉴">•••</button>
+          </div>
+        </div>
+      </aside>
+
+      <main class="main-area">
+        <header class="topbar">
+          <button class="mobile-menu" id="mobileMenu" aria-label="메뉴 열기">☰</button>
+          <div class="breadcrumbs">보이스온 실용음악학원 <span>/</span> <strong id="breadcrumb">대시보드</strong></div>
+          <div class="top-actions">
+            <label class="role-picker"><span>보기 권한</span><select id="roleSelect" aria-label="사용자 권한"><option value="owner">원장</option><option value="manager">관리자</option><option value="teacher">강사</option><option value="student">원생</option></select></label>
+            <button class="icon-button notification-button" aria-label="알림">♧<i></i></button>
+            <div class="top-avatar">김</div>
+          </div>
+        </header>
+        <div id="appContent" class="content"></div>
+      </main>
+    </div>
+    <div id="modalRoot"></div>
+    <div id="toastRoot" class="toast-root" aria-live="polite"></div>
+    <script src="./app.js"></script>
+  </body>
+</html>
