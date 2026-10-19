@@ -341,7 +341,237 @@ function renderSettings() {
       <section class="panel setting-card"><h3>연습실 · 예약 정책</h3><p>노쇼 횟수가 기준에 도달하면 원생의 예약 등록이 제한됩니다.</p><div class="setting-row"><span>노쇼 예약 제한 기준</span><label><input class="setting-input" id="noShowLimit" type="number" min="1" max="10" value="${state.settings.noShowLimit}"> 회</label></div><div class="setting-row"><span>입시반 일일 예약 한도</span><strong>4시간</strong></div><div class="setting-row"><span>취미반 일일 예약 한도</span><strong>2시간</strong></div><div class="setting-row"><span>강사 고정 레슨실</span><strong>평일 · 요일별 배정</strong></div></section>
       <section class="panel setting-card"><h3>급여 · 고정 레슨실 설정</h3><p>강사별 회당 급여를 지정하고, 반복 배정 요일과 고정 레슨실을 설정합니다.</p>${state.teachers.map(teacher => `<div class="setting-row"><span>${escapeHtml(teacher.name)} · 급여</span><label><input class="setting-input teacher-rate" data-id="${teacher.id}" type="number" min="0" step="1000" value="${teacher.rate}"> 원/회</label></div><div class="setting-row"><span>${escapeHtml(teacher.name)} · 고정 레슨실</span><select class="filter-select teacher-room" data-id="${teacher.id}">${["레슨실 A", "레슨실 B", "레슨실 C"].map(room => `<option ${teacher.fixedRoom === room ? "selected" : ""}>${room}</option>`).join("")}</select></div><div class="setting-row"><span>상시 배정 요일</span><span>${["월", "화", "수", "목", "금"].map((day, index) => `<label style="margin-left:5px"><input class="teacher-day" data-id="${teacher.id}" type="checkbox" value="${index + 1}" ${teacher.fixedDays?.includes(index + 1) ? "checked" : ""}>${day}</label>`).join("")}</span></div>`).join("")}</section>
       <section class="panel setting-card"><h3>정기 회계 내역</h3><p>매월 정해진 날짜에 반복 입력할 수 있는 고정 수입·지출 예시입니다.</p><div class="setting-row"><span>학원 월 임대료</span><strong>지출 · 매월 2일</strong></div><div class="setting-row"><span>건물 관리비</span><strong>지출 · 매월 3일</strong></div><div class="setting-row"><span>연습실 대여</span><strong>수입 · 매월 5일</strong></div><div class="setting-row"><span>전기·수도·인터넷</span><strong>지출 · 매월 6일</strong></div></section>
+      <section class="panel setting-card csv-tools"><h3>CSV 가져오기 · 백업</h3><p>원생·강사·수업·예약·회계·사용자 목록을 CSV로 가져오고, 전체 운영 데이터를 CSV 한 파일로 백업할 수 있습니다. 브라우저에 저장된 데모 데이터만 다룹니다.</p><div class="csv-actions"><button class="button" data-action="export-csv">↓ 전체 CSV 백업</button><button class="button" data-action="export-dataset">↓ 선택 목록 CSV 내보내기</button><button class="button primary" data-action="import-csv">↑ CSV 가져오기</button></div><div class="form-hint">선택 목록 내보내기 파일을 수정해 다시 가져오거나, 전체 백업 파일을 가져와 복원할 수 있습니다. 가져오기는 기본적으로 ID 기준 병합하며 전체 교체도 선택할 수 있습니다.</div></section>
     </div>`;
+}
+
+const csvCollections = {
+  students: { label: "원생", filename: "students.csv", required: ["name"] },
+  teachers: { label: "강사", filename: "teachers.csv", required: ["name"] },
+  lessons: { label: "수업·출결", filename: "lessons.csv", required: ["date", "time", "studentId", "teacher", "status"] },
+  bookings: { label: "연습실 예약", filename: "bookings.csv", required: ["date", "start", "room", "person", "status"] },
+  transactions: { label: "수입·지출", filename: "transactions.csv", required: ["date", "kind", "category", "detail", "amount"] },
+  users: { label: "사용자", filename: "users.csv", required: ["name", "email", "role"] }
+};
+const backupCollections = [...Object.keys(csvCollections), "settings", "recurringTemplate", "activity"];
+const csvAliases = {
+  id: ["id", "아이디", "번호"], name: ["name", "이름", "원생명", "강사명", "사용자명"],
+  phone: ["phone", "연락처", "전화번호"], guardian: ["guardian", "보호자", "학부모"],
+  guardianPhone: ["guardianphone", "보호자연락처", "학부모연락처"], level: ["level", "반", "수강반"],
+  teacher: ["teacher", "담당강사", "강사"], monthlyFee: ["monthlyfee", "월수강료", "수강료"],
+  balance: ["balance", "잔여횟수", "잔여레슨"], granted: ["granted", "충전횟수", "총레슨횟수"],
+  due: ["due", "미납", "미납금액"], noShows: ["noshows", "노쇼횟수"], subject: ["subject", "과목"],
+  rate: ["rate", "회당급여", "급여"], adjustment: ["adjustment", "급여조정"],
+  fixedRoom: ["fixedroom", "고정레슨실"], fixedDays: ["fixeddays", "고정요일"],
+  date: ["date", "날짜", "일자"], time: ["time", "시간"], studentId: ["studentid", "원생id", "원생아이디"],
+  type: ["type", "수업유형", "유형"], room: ["room", "공간", "연습실"], status: ["status", "상태", "출결상태"],
+  feedback: ["feedback", "피드백"], start: ["start", "시작시간"], hours: ["hours", "이용시간"],
+  person: ["person", "예약자"], kind: ["kind", "구분"], category: ["category", "항목"],
+  detail: ["detail", "내용", "상세"], amount: ["amount", "금액"], recurring: ["recurring", "반복"],
+  email: ["email", "이메일"], role: ["role", "역할", "권한"], active: ["active", "활성"]
+};
+const numericCsvFields = new Set(["id", "studentId", "monthlyFee", "balance", "granted", "due", "noShows", "rate", "adjustment", "hours", "amount"]);
+
+function csvCell(value) {
+  const text = value == null ? "" : typeof value === "object" ? JSON.stringify(value) : String(value);
+  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+function downloadCsv(filename, rows) {
+  const csv = `\uFEFF${rows.map(row => row.map(csvCell).join(",")).join("\r\n")}\r\n`;
+  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  const link = document.createElement("a");
+  link.href = url; link.download = filename; link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+function datasetCsvRows(collection) {
+  const records = collection === "recurringTemplate"
+    ? state.recurringTemplate || [...new Map(state.transactions.filter(item => item.recurring).map(item => [item.detail, item])).values()]
+    : state[collection];
+  const keys = [...new Set(records.flatMap(record => Object.keys(record || {})))];
+  return [keys, ...records.map(record => keys.map(key => record[key] ?? ""))];
+}
+function exportFullBackup() {
+  const records = [];
+  backupCollections.forEach(collection => {
+    const data = collection === "settings" ? [state.settings] : collection === "recurringTemplate"
+      ? state.recurringTemplate || [...new Map(state.transactions.filter(item => item.recurring).map(item => [item.detail, item])).values()]
+      : state[collection] || [];
+    data.forEach((item, index) => records.push([collection, item?.id ?? (collection === "settings" ? "main" : index), JSON.stringify(item)]));
+  });
+  downloadCsv(`vocalflow-backup-${todayKey}.csv`, [["collection", "record_id", "data_json"], ...records]);
+  toast("전체 데이터를 CSV 파일로 백업했습니다.");
+}
+function parseCsv(text) {
+  const source = text.replace(/^\uFEFF/, "");
+  const rows = [];
+  let row = [], cell = "", quoted = false;
+  for (let i = 0; i < source.length; i++) {
+    const char = source[i];
+    if (quoted) {
+      if (char === '"' && source[i + 1] === '"') { cell += '"'; i++; }
+      else if (char === '"') quoted = false;
+      else cell += char;
+    } else if (char === '"' && cell === "") quoted = true;
+    else if (char === ",") { row.push(cell); cell = ""; }
+    else if (char === "\n" || char === "\r") {
+      if (char === "\r" && source[i + 1] === "\n") i++;
+      row.push(cell); cell = "";
+      if (row.some(value => value !== "")) rows.push(row);
+      row = [];
+    } else cell += char;
+  }
+  if (quoted) throw new Error("CSV 따옴표가 올바르게 닫히지 않았습니다.");
+  row.push(cell);
+  if (row.some(value => value !== "")) rows.push(row);
+  if (rows.length < 2) throw new Error("가져올 데이터가 없거나 CSV 헤더가 없습니다.");
+  const headers = rows.shift().map(header => header.trim());
+  if (headers.some(header => !header)) throw new Error("CSV 헤더에 빈 항목이 있습니다.");
+  return rows.map((values, index) => {
+    if (values.length !== headers.length) throw new Error(`${index + 2}번째 행의 열 개수가 헤더와 다릅니다.`);
+    return Object.fromEntries(headers.map((header, column) => [header, values[column]]));
+  });
+}
+function normalizeCsvValue(fieldName, value) {
+  if (value === "") return "";
+  if (numericCsvFields.has(fieldName)) {
+    const number = Number(value.replace(/[,\s원₩]/g, ""));
+    if (!Number.isFinite(number)) throw new Error(`${fieldName} 열에는 숫자만 입력할 수 있습니다.`);
+    return number;
+  }
+  if (["active", "recurring"].includes(fieldName)) {
+    if (["true", "1", "yes", "사용", "사용 중", "활성"].includes(value.toLowerCase())) return true;
+    if (["false", "0", "no", "중지", "비활성", "일회성"].includes(value.toLowerCase())) return false;
+    if (fieldName === "recurring" && value === "매월 반복") return true;
+    throw new Error(`${fieldName} 열은 true/false로 입력해주세요.`);
+  }
+  if (["fixedDays", "feedback"].includes(fieldName) || /^[\[{]/.test(value.trim())) {
+    try { return JSON.parse(value); } catch { throw new Error(`${fieldName} 열의 JSON 값이 올바르지 않습니다.`); }
+  }
+  return value;
+}
+function mergeCsvRecords(current, incoming) {
+  const result = [...current];
+  incoming.forEach(record => {
+    const index = record.id === undefined ? -1 : result.findIndex(item => Number(item.id) === Number(record.id));
+    if (index < 0) result.push(record);
+    else result[index] = { ...result[index], ...record };
+  });
+  if (result.some((item, index) => item.id !== undefined && result.findIndex(other => Number(other.id) === Number(item.id)) !== index)) throw new Error("가져온 ID가 기존 데이터와 중복됩니다.");
+  return result;
+}
+function importCsvModal() {
+  const options = Object.entries(csvCollections).map(([key, value]) => [key, value.label]);
+  showModal("CSV 가져오기", `<div class="notice warning">가져온 정보는 이 브라우저의 데모 데이터에만 반영됩니다. 전체 백업 복원 또는 목록 전체 교체는 기존 데이터를 덮어씁니다.</div><div class="form-grid">${selectField("CSV 종류", "collection", [["backup", "전체 백업 파일"], ...options])}${selectField("가져오기 방식", "mode", [["merge", "ID 기준 병합"], ["replace", "선택 데이터 전체 교체"]])}<div class="form-field full"><label for="csvFile">CSV 파일</label><input id="csvFile" name="csvFile" type="file" accept=".csv,text/csv" required></div></div><p class="form-hint">전체 백업 파일은 collection, record_id, data_json 열이 있는 보컬플로우 백업 파일을 선택하세요. 목록 CSV에는 내보내기 파일의 헤더를 사용할 수 있습니다.</p>`, "가져오기", form => { void importCsvFile(form); });
+}
+function exportDatasetModal() {
+  const options = Object.entries(csvCollections).map(([key, value]) => [key, value.label]);
+  showModal("목록 CSV 내보내기", `<div class="form-field">${selectField("내보낼 목록", "collection", options, "students")}</div><p class="form-hint">다운로드된 CSV는 이 화면의 CSV 가져오기 기능으로 다시 불러올 수 있습니다.</p>`, "CSV 다운로드", form => {
+    const collection = String(form.get("collection"));
+    if (!csvCollections[collection]) { toast("내보낼 목록을 선택해주세요."); return; }
+    downloadCsv(csvCollections[collection].filename, datasetCsvRows(collection));
+    closeModal(); toast(`${csvCollections[collection].label} 목록을 CSV로 내보냈습니다.`);
+  });
+}
+function csvImportRows(collection, sourceRows) {
+  const aliases = new Map(Object.entries(csvAliases).flatMap(([fieldName, names]) => names.map(name => [name.toLowerCase().replace(/[\s_-]/g, ""), fieldName])));
+  const allowed = new Set(Object.keys(state[collection]?.[0] || {}));
+  const headerMap = Object.keys(sourceRows[0]).map(sourceHeader => {
+    const fieldName = aliases.get(sourceHeader.toLowerCase().replace(/[\s_-]/g, "")) || sourceHeader;
+    return { sourceHeader, fieldName };
+  }).filter(item => allowed.has(item.fieldName));
+  if (!headerMap.length) throw new Error("선택한 목록과 맞는 CSV 열을 찾지 못했습니다. 내보내기 CSV 형식을 사용해주세요.");
+  const records = sourceRows.map((source, index) => {
+    const record = {};
+    headerMap.forEach(({ sourceHeader, fieldName }) => {
+      record[fieldName] = normalizeCsvValue(fieldName, source[sourceHeader]);
+    });
+    if (collection === "users" && record.role !== undefined) record.role = ({ "원장": "owner", "관리자": "manager", "강사": "teacher", "원생": "student" })[record.role] || record.role;
+    if (collection === "lessons" && record.status !== undefined) record.status = ({ "출석": "present", "예정": "planned", "결석": "absent", "취소": "leave" })[record.status] || record.status;
+    if (collection === "bookings" && record.status !== undefined) record.status = ({ "예약 완료": "booked", "노쇼": "noshow", "취소": "cancelled" })[record.status] || record.status;
+    if (collection === "transactions" && record.kind !== undefined) record.kind = ({ "income": "수입", "expense": "지출" })[record.kind.toLowerCase()] || record.kind;
+    const required = csvCollections[collection]?.required || [];
+    if (required.some(fieldName => record[fieldName] === undefined || record[fieldName] === "")) throw new Error(`${index + 2}번째 행에 필수 항목(${required.join(", ")})이 없습니다.`);
+    return record;
+  });
+  const usedIds = new Set();
+  const current = state[collection] || [];
+  let nextId = Math.max(0, ...current.map(item => Number(item.id) || 0), ...records.map(item => Number(item.id) || 0)) + 1;
+  records.forEach(record => {
+    if ("id" in (state[collection]?.[0] || {})) {
+      if (record.id === undefined || record.id === "") record.id = nextId++;
+      if (!Number.isInteger(Number(record.id)) || Number(record.id) < 1) throw new Error("ID는 1 이상의 정수여야 합니다.");
+      record.id = Number(record.id);
+      if (usedIds.has(record.id)) throw new Error(`CSV에 중복된 ID ${record.id}가 있습니다.`);
+      usedIds.add(record.id);
+    }
+  });
+  if (collection === "users") {
+    const emails = new Set();
+    records.forEach(user => {
+      user.email = String(user.email).trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(user.email)) throw new Error(`${user.email}은 올바른 이메일 형식이 아닙니다.`);
+      if (!["owner", "manager", "teacher", "student"].includes(user.role)) throw new Error("사용자 역할은 owner, manager, teacher, student 중 하나여야 합니다.");
+      if (emails.has(user.email)) throw new Error(`CSV에 중복된 이메일 ${user.email}이 있습니다.`);
+      emails.add(user.email);
+      if (user.active === undefined) user.active = true;
+    });
+  }
+  return records;
+}
+async function importCsvFile(form) {
+  const file = form.get("csvFile");
+  const collection = String(form.get("collection"));
+  const mode = String(form.get("mode"));
+  if (!(file instanceof File) || !file.size) { toast("가져올 CSV 파일을 선택해주세요."); return; }
+  if (mode === "replace" && !confirm("선택한 데이터의 기존 항목을 CSV 내용으로 교체할까요? 이 작업은 되돌릴 수 없습니다.")) return;
+  try {
+    const rows = parseCsv(await file.text());
+    const nextState = structuredClone(state);
+    if (rows[0].collection !== undefined || collection === "backup") {
+      if (rows[0].collection === undefined || !["collection", "record_id", "data_json"].every(key => key in rows[0])) throw new Error("전체 백업 CSV에는 collection, record_id, data_json 헤더가 필요합니다.");
+      const grouped = new Map();
+      rows.forEach((row, index) => {
+        if (!backupCollections.includes(row.collection)) throw new Error(`${index + 2}번째 행에 알 수 없는 collection(${row.collection})이 있습니다.`);
+        let value;
+        try { value = JSON.parse(row.data_json); } catch { throw new Error(`${index + 2}번째 행의 JSON 데이터가 올바르지 않습니다.`); }
+        if (!value || typeof value !== "object") throw new Error(`${index + 2}번째 행의 데이터는 객체여야 합니다.`);
+        if (!grouped.has(row.collection)) grouped.set(row.collection, []);
+        grouped.get(row.collection).push(value);
+      });
+      if (mode === "replace" && backupCollections.some(key => !grouped.has(key))) throw new Error("전체 복원 파일에 필요한 데이터 영역이 빠져 있습니다.");
+      grouped.forEach((records, key) => {
+        if (key === "settings") {
+          if (records.length !== 1 || Array.isArray(records[0])) throw new Error("백업 설정 데이터가 올바르지 않습니다.");
+          nextState.settings = mode === "replace" ? records[0] : { ...nextState.settings, ...records[0] };
+        } else {
+          if (records.some(record => !record || typeof record !== "object" || Array.isArray(record))) throw new Error(`${key} 목록 형식이 올바르지 않습니다.`);
+          nextState[key] = mode === "replace" ? records : mergeCsvRecords(nextState[key] || [], records);
+        }
+      });
+      if (grouped.has("activity")) {
+        nextState.activity = nextState.activity.map(item => ({
+          ...item,
+          text: String(item.text || "").replace(/<(?!\/?strong>)[^>]*>/gi, "")
+        }));
+      }
+      if (!Array.isArray(nextState.users) || !nextState.users.some(user => user.role === "owner" && user.active !== false)) throw new Error("복원 데이터에는 활성 원장 계정이 최소 1개 있어야 합니다.");
+    } else {
+      if (!csvCollections[collection]) throw new Error("CSV 종류를 선택해주세요.");
+      const incoming = csvImportRows(collection, rows);
+      nextState[collection] = mode === "replace" ? incoming : mergeCsvRecords(nextState[collection] || [], incoming);
+      if (collection === "users" && !nextState.users.some(user => user.role === "owner" && user.active !== false)) throw new Error("활성 원장 계정은 최소 1개 필요합니다.");
+    }
+    if (Array.isArray(nextState.users)) {
+      const emails = nextState.users.map(user => String(user.email || "").toLowerCase());
+      if (new Set(emails).size !== emails.length) throw new Error("사용자 이메일이 중복되어 데이터를 반영하지 않았습니다.");
+    }
+    state = nextState;
+    persist(); closeModal(); render();
+    toast("CSV 데이터를 가져왔습니다.");
+  } catch (error) {
+    console.error("CSV 데이터를 가져오지 못했습니다.", error);
+    toast(error instanceof Error ? error.message : "CSV 데이터를 가져오지 못했습니다.");
+  }
 }
 
 function renderUsers() {
@@ -622,6 +852,9 @@ document.addEventListener("click", event => {
   else if (action === "export-payroll") exportPayroll();
   else if (action === "generate-recurring") generateRecurring();
   else if (action === "display") displayRooms();
+  else if (action === "export-csv") exportFullBackup();
+  else if (action === "export-dataset") exportDatasetModal();
+  else if (action === "import-csv") importCsvModal();
   else if (action === "add-user") userModal();
   else if (action === "edit-user") {
     if (viewingRole !== "owner" && viewingRole !== "manager") { toast("사용자 관리는 원장 또는 관리자 권한이 필요합니다."); return; }
