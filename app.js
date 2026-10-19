@@ -347,7 +347,7 @@ function renderSettings() {
 function renderUsers() {
   const roleNames = { owner: "원장", manager: "관리자", teacher: "강사", student: "원생" };
   const rows = state.users.map(user => {
-    const allowedPages = (rolePages[user.role] || []).filter(page => page !== "users");
+    const allowedPages = rolePages[user.role] || [];
     const permissions = allowedPages.map(page => pageNames[page]).join(" · ");
     const canEdit = viewingRole === "owner" || user.role !== "owner";
     return `<tr>
