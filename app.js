@@ -48,6 +48,12 @@ const seed = {
     { id: 6, date: `${monthKey}-08`, kind: "수입", category: "수강료", detail: "수강료 납부", amount: 240000, recurring: false }
   ],
   settings: { noShowLimit: 3, lessonRate: 30000, lastRecurringMonth: monthKey },
+  users: [
+    { id: 1, name: "김보이스", email: "owner@example.com", role: "owner", active: true },
+    { id: 2, name: "박관리", email: "manager@example.com", role: "manager", active: true },
+    { id: 3, name: "박서연", email: "teacher@example.com", role: "teacher", active: true },
+    { id: 4, name: "이지우", email: "student@example.com", role: "student", active: true }
+  ],
   activity: [
     { text: "<strong>이지우</strong> 학생의 출석이 기록되었어요.", time: "10:04", color: "green" },
     { text: "<strong>김민준</strong> 학생의 수강료가 미납 상태예요.", time: "09:30", color: "orange" },
@@ -87,7 +93,7 @@ function loadState() {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (!saved) return structuredClone(seed);
     const parsed = JSON.parse(saved);
-    return { ...structuredClone(seed), ...parsed };
+    return { ...structuredClone(seed), ...parsed, users: Array.isArray(parsed.users) ? parsed.users : structuredClone(seed.users) };
   } catch (error) {
     console.error("저장된 데이터를 불러오지 못했습니다.", error);
     return structuredClone(seed);
@@ -126,10 +132,10 @@ function statusPill(status) {
   return `<span class="status ${item[1]}">${item[0]}</span>`;
 }
 
-const pageNames = { dashboard: "대시보드", schedule: "수업 · 출결", feedback: "수업 피드백", students: "원생 · 수납", rooms: "연습실 예약", teachers: "강사 · 급여", accounting: "수입 · 지출", settings: "설정" };
+const pageNames = { dashboard: "대시보드", schedule: "수업 · 출결", feedback: "수업 피드백", students: "원생 · 수납", rooms: "연습실 예약", teachers: "강사 · 급여", accounting: "수입 · 지출", settings: "설정", users: "사용자 관리" };
 const rolePages = {
-  owner: ["dashboard", "schedule", "feedback", "students", "rooms", "teachers", "accounting", "settings"],
-  manager: ["dashboard", "schedule", "feedback", "students", "rooms", "teachers", "accounting", "settings"],
+  owner: ["dashboard", "schedule", "feedback", "students", "rooms", "teachers", "accounting", "settings", "users"],
+  manager: ["dashboard", "schedule", "feedback", "students", "rooms", "teachers", "accounting", "settings", "users"],
   teacher: ["dashboard", "schedule", "feedback", "rooms", "teachers"],
   student: ["dashboard", "schedule", "students", "rooms"]
 };
@@ -153,7 +159,8 @@ function render() {
     rooms: renderRooms,
     teachers: renderTeachers,
     accounting: renderAccounting,
-    settings: renderSettings
+    settings: renderSettings,
+    users: renderUsers
   };
   content.innerHTML = (pages[currentPage] || renderDashboard)();
 }
@@ -335,6 +342,52 @@ function renderSettings() {
       <section class="panel setting-card"><h3>급여 · 고정 레슨실 설정</h3><p>강사별 회당 급여를 지정하고, 반복 배정 요일과 고정 레슨실을 설정합니다.</p>${state.teachers.map(teacher => `<div class="setting-row"><span>${escapeHtml(teacher.name)} · 급여</span><label><input class="setting-input teacher-rate" data-id="${teacher.id}" type="number" min="0" step="1000" value="${teacher.rate}"> 원/회</label></div><div class="setting-row"><span>${escapeHtml(teacher.name)} · 고정 레슨실</span><select class="filter-select teacher-room" data-id="${teacher.id}">${["레슨실 A", "레슨실 B", "레슨실 C"].map(room => `<option ${teacher.fixedRoom === room ? "selected" : ""}>${room}</option>`).join("")}</select></div><div class="setting-row"><span>상시 배정 요일</span><span>${["월", "화", "수", "목", "금"].map((day, index) => `<label style="margin-left:5px"><input class="teacher-day" data-id="${teacher.id}" type="checkbox" value="${index + 1}" ${teacher.fixedDays?.includes(index + 1) ? "checked" : ""}>${day}</label>`).join("")}</span></div>`).join("")}</section>
       <section class="panel setting-card"><h3>정기 회계 내역</h3><p>매월 정해진 날짜에 반복 입력할 수 있는 고정 수입·지출 예시입니다.</p><div class="setting-row"><span>학원 월 임대료</span><strong>지출 · 매월 2일</strong></div><div class="setting-row"><span>건물 관리비</span><strong>지출 · 매월 3일</strong></div><div class="setting-row"><span>연습실 대여</span><strong>수입 · 매월 5일</strong></div><div class="setting-row"><span>전기·수도·인터넷</span><strong>지출 · 매월 6일</strong></div></section>
     </div>`;
+}
+
+function renderUsers() {
+  const roleNames = { owner: "원장", manager: "관리자", teacher: "강사", student: "원생" };
+  const rows = state.users.map(user => {
+    const allowedPages = (rolePages[user.role] || []).filter(page => page !== "users");
+    const permissions = allowedPages.map(page => pageNames[page]).join(" · ");
+    const canEdit = viewingRole === "owner" || user.role !== "owner";
+    return `<tr>
+      <td><strong>${escapeHtml(user.name)}</strong></td>
+      <td>${escapeHtml(user.email)}</td>
+      <td><span class="status ${user.role === "owner" || user.role === "manager" ? "active" : "leave"}">${roleNames[user.role] || "미지정"}</span></td>
+      <td><span class="status ${user.active ? "active" : "blocked"}">${user.active ? "사용 중" : "사용 중지"}</span></td>
+      <td class="user-permissions">${escapeHtml(permissions || "허용된 메뉴 없음")}</td>
+      <td>${canEdit ? `<button class="button small" data-action="edit-user" data-id="${user.id}">권한 수정</button> <button class="button small ${user.active ? "danger" : ""}" data-action="toggle-user" data-id="${user.id}">${user.active ? "중지" : "활성화"}</button>` : `<span class="muted">원장 전용</span>`}</td>
+    </tr>`;
+  }).join("");
+  return `${heading("사용자 관리", "계정에 역할을 지정해 메뉴 보기 권한을 부여하고 관리하세요.", `<button class="button primary" data-action="add-user">＋ 사용자 추가</button>`)}
+    <div class="notice warning"><strong>데모 권한 관리</strong> · 여기서 지정하는 계정과 역할은 이 브라우저에만 저장됩니다. 실제 초대 메일, 로그인 및 서버 측 접근 제어는 연결되어 있지 않습니다.</div>
+    <section class="panel table-panel"><div class="panel-head"><div><div class="panel-title">계정 및 보기 권한</div><div class="panel-caption">역할을 선택하면 아래 메뉴 접근 범위가 적용됩니다. 총 ${state.users.length}명</div></div></div>
+    <table class="data-table"><thead><tr><th>사용자</th><th>이메일</th><th>역할</th><th>계정 상태</th><th>허용 메뉴</th><th>관리</th></tr></thead><tbody>${rows || `<tr><td colspan="6"><div class="empty-state">등록된 사용자가 없습니다.</div></td></tr>`}</tbody></table>
+    <div class="table-footer"><span>원장·관리자만 사용자 권한을 관리할 수 있습니다.</span><span>역할별 권한 안내는 <button class="text-button" data-page="settings">운영 설정</button>에서 확인하세요.</span></div></section>`;
+}
+
+function userModal(user = null) {
+  if (viewingRole !== "owner" && viewingRole !== "manager") { toast("사용자 관리는 원장 또는 관리자 권한이 필요합니다."); return; }
+  if (user?.role === "owner" && viewingRole !== "owner") { toast("원장 계정은 원장만 관리할 수 있습니다."); return; }
+  const roleOptions = [["manager", "관리자"], ["teacher", "강사"], ["student", "원생"]];
+  if (viewingRole === "owner") roleOptions.unshift(["owner", "원장"]);
+  const initialRole = user?.role === "owner" && viewingRole !== "owner" ? "manager" : user?.role || "student";
+  showModal(user ? "사용자 권한 수정" : "사용자 추가", `<div class="notice">역할별로 학원 메뉴의 보기 권한이 적용됩니다. 이 데모에서는 초대 메일이나 실제 로그인을 보내지 않습니다.</div><div class="form-grid">${field("이름", "name", "text", user?.name || "", 'required maxlength="40"')}${field("이메일", "email", "email", user?.email || "", 'required maxlength="120"')}${selectField("역할 · 보기 권한", "role", roleOptions.map(([value, label]) => [value, label]), initialRole)}</div>`, user ? "권한 저장" : "사용자 추가", form => {
+    const name = String(form.get("name") || "").trim();
+    const email = String(form.get("email") || "").trim().toLowerCase();
+    const role = String(form.get("role"));
+    if (!name || !email || !rolePages[role]) { toast("이름, 이메일, 권한을 확인해주세요."); return; }
+    if (viewingRole !== "owner" && role === "owner") { toast("원장 권한은 원장만 부여할 수 있습니다."); return; }
+    if (state.users.some(item => item.email.toLowerCase() === email && item.id !== user?.id)) { toast("이미 등록된 이메일입니다."); return; }
+    if (user) {
+      user.name = name;
+      user.email = email;
+      user.role = role;
+    } else {
+      state.users.push({ id: Date.now(), name, email, role, active: true });
+    }
+    persist(); closeModal(); render(); toast(user ? "사용자 권한을 저장했습니다." : "사용자를 추가했습니다.");
+  });
 }
 
 function toast(message) {
@@ -569,6 +622,21 @@ document.addEventListener("click", event => {
   else if (action === "export-payroll") exportPayroll();
   else if (action === "generate-recurring") generateRecurring();
   else if (action === "display") displayRooms();
+  else if (action === "add-user") userModal();
+  else if (action === "edit-user") {
+    if (viewingRole !== "owner" && viewingRole !== "manager") { toast("사용자 관리는 원장 또는 관리자 권한이 필요합니다."); return; }
+    const user = state.users.find(item => item.id === Number(id));
+    if (user) userModal(user);
+  }
+  else if (action === "toggle-user") {
+    if (viewingRole !== "owner" && viewingRole !== "manager") { toast("사용자 관리는 원장 또는 관리자 권한이 필요합니다."); return; }
+    const user = state.users.find(item => item.id === Number(id));
+    if (!user) return;
+    if (user.role === "owner" && viewingRole !== "owner") { toast("원장 계정은 원장만 관리할 수 있습니다."); return; }
+    if (user.role === "owner" && user.active && state.users.filter(item => item.role === "owner" && item.active).length === 1) { toast("활성 상태의 원장 계정은 최소 1개 필요합니다."); return; }
+    user.active = !user.active;
+    persist(); render(); toast(`${user.name} 계정을 ${user.active ? "활성화" : "중지"}했습니다.`);
+  }
   else if (action === "save-settings") {
     const limit = Number(document.getElementById("noShowLimit").value);
     if (limit < 1 || limit > 10) { toast("노쇼 제한 기준은 1~10회 사이로 설정해주세요."); return; }
