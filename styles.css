@@ -34,6 +34,7 @@ button { cursor: pointer; }
 .chevron { color: #9296a7; font-size: 17px; }
 .nav-label { color: #b1b4c2; font-size: 9px; font-weight: 700; letter-spacing: 1.2px; padding: 0 13px 11px; }
 .main-nav { display: flex; flex-direction: column; gap: 5px; }
+.nav-item[hidden] { display: none; }
 .nav-item { border: 0; width: 100%; text-align: left; background: transparent; border-radius: 9px; height: 43px; display: flex; align-items: center; gap: 13px; padding: 0 13px; color: #777c90; font-size: 12px; font-weight: 600; transition: .16s; }
 .nav-item:hover { background: #f7f7fc; color: var(--ink); }.nav-item.active { background: var(--soft-purple); color: var(--purple); font-weight: 700; }
 .nav-icon { width: 17px; text-align: center; font-size: 17px; font-weight: 500; }
